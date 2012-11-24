@@ -1,0 +1,70 @@
+(ns sleave.songs.evaels
+  (:use
+   [overtone.live]
+   [overtone.inst.drum]))
+
+;; Modified version of ctford's shudder
+;; https://github.com/ctford/whelmed/blob/master/src/whelmed/instrument.clj
+(definst shudder [freq 440 vibrato 6]
+  (let [envelope (env-gen (perc 2 3) :action FREE)]
+    (*
+     (* envelope (sin-osc:kr vibrato))
+     (sin-osc freq))))
+
+(shudder 440)
+(stop)
+
+(definst saw-wave [freq 440 attack 0.01 sustain 0.4 release 0.1 vol 0.4]
+  (* (env-gen (lin-env attack sustain release) 1 1 0 1 FREE)
+     (saw freq)
+     vol))
+
+(defn note->hz [music-note]
+  (midi->hz (note music-note)))
+
+(defn shudder2 [music-note]
+  (shudder (midi->hz (note music-note))))
+
+(defn saw2 [music-note]
+  (saw-wave (midi->hz (note music-note))))
+
+
+(defn play-chord [a-synth a-chord]
+  (doseq [note a-chord] (a-synth note)))
+
+;; a-chord is a vector of notes
+
+(play-chord saw2 (chord :C4 :major))
+
+(defonce metro (metronome 120))
+
+
+(metro)
+
+(defn chord-progression-beat [m beat-num]
+  (at (m (+ 0 beat-num))(play-chord (chord :C4 :major)))
+  (at (m (+ 4 beat-num))(play-chord (chord :G3 :major)))
+  (at (m (+ 8 beat-num))(play-chord (chord :A3 :minor)))
+  (at (m (+ 12 beat-num))(play-chord (chord :G3 :major)))
+  (apply-at (m (+ 16 beat-num)) chord-progression-beat m (+ 16 beat-num) []))
+
+;; Generalize so any synth can be passed into progression
+
+(defn chord-progression [m beat-num a-synth]
+  (at (m (+ 0 beat-num))(play-chord a-synth (chord :C4 :major)))
+  (at (m (+ 4 beat-num))(play-chord a-synth (chord :G3 :major)))
+  (at (m (+ 8 beat-num))(play-chord a-synth (chord :A3 :minor)))
+  (at (m (+ 12 beat-num))(play-chord  a-synth(chord :G3 :major)))
+  (apply-at (m (+ 16 beat-num)) shudder2-chord-progression m (+ 16 beat-num) a-synth []))
+
+(chord-progression metro (metro) shudder2)
+
+(chord-progression metro (metro) saw2)
+
+(def progression [[0 shudder2 [:C4 :major]]
+                  [4 shudder2 [:G3 :major]]
+                  [8 shudder2 [:A3 :minor]]
+                  [12 shudder2 [:G3 :major]]])
+
+(stop)
+
