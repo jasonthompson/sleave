@@ -1,49 +1,18 @@
 (ns sleave.songs.evaels
+
   (:use
    [overtone.live]
    [overtone.inst.drum]))
 
-;; Modified version of ctford's shudder
-;; https://github.com/ctford/whelmed/blob/master/src/whelmed/instrument.clj
-(definst shudder [freq 440 vibrato 6]
-  (let [envelope (env-gen (perc 2 3) :action FREE)]
-    (*
-     (* envelope (sin-osc:kr vibrato))
-     (sin-osc freq))))
-
-(definst saw-wave [freq 440 attack 0.01 sustain 0.4 release 0.1 vol 0.4]
-  (* (env-gen (lin-env attack sustain release) 1 1 0 1 FREE)
-     (saw freq)
-     vol))
 
 (defn note->hz [music-note]
   (midi->hz (note music-note)))
 
-(defn shudder2 [music-note]
-  (shudder (midi->hz (note music-note))))
-
-(defn saw2 [music-note]
-  (saw-wave (midi->hz (note music-note))))
-
 
 (defn play-chord [a-synth a-chord]
-  (doseq [note a-chord] (a-synth note)))
+  (doseq [note a-chord]
+    (a-synth note)))
 
-;; a-chord is a vector of notes
-
-(play-chord saw2 (chord :C4 :major))
-
-(defonce metro (metronome 120))
-
-
-(metro)
-
-(defn chord-progression-beat [m beat-num]
-  (at (m (+ 0 beat-num))(play-chord (chord :C4 :major)))
-  (at (m (+ 4 beat-num))(play-chord (chord :G3 :major)))
-  (at (m (+ 8 beat-num))(play-chord (chord :A3 :minor)))
-  (at (m (+ 12 beat-num))(play-chord (chord :G3 :major)))
-  (apply-at (m (+ 16 beat-num)) chord-progression-beat m (+ 16 beat-num) []))
 
 ;; Generalize so any synth can be passed into progression
 
@@ -54,21 +23,17 @@
   (at (m (+ 12 beat-num))(play-chord  a-synth(chord :G3 :major)))
   (apply-at (m (+ 16 beat-num)) chord-progression m (+ 16 beat-num) a-synth []))
 
-(chord-progression metro (metro) shudder2)
 
-(chord-progression metro (metro) saw2)
+(definst easy [freq 440 duration 1 level 1]
+  (let [env (env-gen (triangle duration level) :action FREE)]
+    (* env (sin-osc freq))))
 
 
-(stop)
 
-(definst easy [freq 440]
-  (sin-osc freq))
-
-(easy 440)
 
 (def partials [0.99 1.1 1.4])
 
-(defsynth easy2 [freq 440 vibrato 10 attack 0.4 sustain 0.4 release 2]
+(defsynth easy2 [freq 440 vibrato 10 attack 0.4 sustain 2 release 2]
   (let [lfo (sin-osc:kr vibrato)
         osc1 (sin-osc freq)
         osc2 (sin-osc (* freq (nth partials 0)))
@@ -86,13 +51,20 @@
         snd (distort snd)]
     (out 0 (pan2 (* env snd)))))
 
-(blippish 440)
 (easy2 440)
+(blippish 440)
 (stop)
 
 (def metro (metronome 100))
 
 (metro)
+
+(defsynth saw-synth [freq 440 attack 0.01 release 1 level 1 curve -4]
+  (let [src (saw freq)
+        env (env-gen (perc attack release level curve) :action FREE)
+        out-snd (rlpf (* src env) 440 0.01)]
+    (out 0 (pan2 out-snd))))
+
 
 (defn play [m beat-num]
   (at (m (+ beat-num 0)) (easy2 (midi->hz (note "C3"))))
@@ -101,15 +73,21 @@
   (at (m (+ beat-num 12)) (easy2 (midi->hz (note "C3"))))
   (apply-at (m (+ beat-num 16)) play metro (+ 16 beat-num) []))
 
-(play metro (metro))
+;; Next Step: generalize this so it will take any chord length
+(defn saw-arpeggio [m beat-num a-chord]
+  (at (m (+ beat-num 0)) (saw-synth (midi->hz (nth a-chord 0))))
+  (at (m (+ beat-num 0.25)) (saw-synth (midi->hz (nth a-chord 1))))
+  (at (m (+ beat-num 0.5)) (saw-synth (midi->hz (nth a-chord 2))))
+  (apply-at (m (+ beat-num 1)) saw-arpeggio metro (+ 1 beat-num) a-chord []))
 
-(defn play-blippish [m beat-num]
-  (at (m (+ beat-num 0)) (blippish (midi->hz (note "C4"))))
-  (at (m (+ beat-num 0.5)) (blippish (midi->hz (note "G3"))))
-  (at (m (+ beat-num 1)) (blippish (midi->hz (note "B3"))))
-  (at (m (+ beat-num 1.5)) (blippish (midi->hz (note "F3"))))
-  (at (m (+ beat-num 3)) (blippish (midi->hz (note "B4"))))
-  (apply-at (m (+ beat-num 8)) play-blippish metro (+ beat-num 8) []))
+
+(blippish 200)
+(saw-arpeggio metro (metro) (chord :c3 :minor))
+(stop)
+
+(chord :c3 :minor)
+(stop)
+(ctl blippish :release 0.25)
 
 (play metro (metro))
 (play-blippish metro (metro))
